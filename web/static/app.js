@@ -104,6 +104,7 @@ async function refreshStatus() {
   } catch (e) {
     badge.textContent = "演示模式";
     badge.className = "badge demo";
+    renderMarkers(DEMO.overview);
   }
 }
 
