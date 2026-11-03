@@ -6,7 +6,7 @@
 
 | 阶段 | AI 怎么用 | 具体做法 |
 |------|----------|----------|
-| 仓库骨架 | AI 生成标准结构 | 用 Claude 生成 `src/`（`config.py` / `agent.py` / `tools.py` / `render_map.py`）、`examples/`、`tests/`、`.github/workflows/` 目录结构 |
+| 仓库骨架 | AI 生成标准结构 | 用 Claude 生成 `src/`（`config.py` / `agent.py` / `tools.py` / `render_map.py`）、`examples/`、`tests/` 目录结构 |
 | README 模板 | AI 生成初稿 | 按 C5 的 README 模板（一句话说明、安装、示例、结构）生成初稿，再手动校正 |
 | .gitignore | AI 生成 | 生成 Python 项目标准忽略规则 |
 
@@ -16,7 +16,7 @@
 |------|----------|----------|
 | 核心代码 | 多轮迭代 | `agent.py`（函数调用主循环）、`tools.py`（haversine 测距 + marker 工具）、`render_map.py`（Leaflet 模板）由 AI 生成，我逐行复核并修正 |
 | 测试 | AI 生成 + 手动补 | AI 生成 `test_tools.py` / `test_render_map.py`，我补充边界断言（同点距离=0、已知纬度差≈111 km） |
-| CI | AI 生成 | AI 生成 GitHub Actions 工作流，push/PR 时自动跑 `unittest discover` |
+| CI | AI 生成后移除 | AI 曾生成 GitHub Actions 工作流，但 GitHub 绑定 token 缺 `workflow` scope 无法运行 Actions，最终移除 `.github/` 目录（详见第五节） |
 
 ## 三、文档撰写
 
@@ -35,6 +35,7 @@
 1. **双语描述偏英文**：C4 阶段模型生成的 `description` 字段中英文比例失衡、英文偏多，中文可读性不足。C5 在 `tools.py` 的 schema 里把 `description` 明确标注为「1-2 句中英文描述」，并保留 `name_zh` 中文名字段，缓解但未完全根治。
 2. **地名张冠李戴**：模型曾把「郑州西亚斯学院主校门」生成成「西雅斯大学主校门」（音译回译错误）。这说明本地小模型对中文地名的事实性仍不可靠——工具层只做执行、不硬编码地点，本意是让模型灵活生成，但也放大了幻觉风险。C5 在 README 里以真实示例指令显式引导「郑州西亚斯学院」。
 3. **依赖最小化**：为满足「clone 后 5 分钟跑起来」，刻意保持**纯 Python 标准库 + 零 pip 依赖**，把唯一的外部运行依赖收敛到 Ollama 与浏览器。
+4. **CI 未能启用**：最初让 AI 生成了 GitHub Actions 工作流，但提交时发现 GitHub 绑定的 token 缺 `workflow` scope，无法真正运行 Actions；与其保留一个永远红叉的空壳 CI，不如诚实移除 `.github/` 目录。测试不依赖 CI，本地 `python -m unittest discover` 即可全量跑通（零 pip 依赖）。
 
 ## 六、手动步骤的反向举证
 

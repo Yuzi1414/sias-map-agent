@@ -67,7 +67,6 @@ sias-map-agent/
 ├── tests/
 │   ├── test_tools.py     # 工具单元测试
 │   └── test_render_map.py # 渲染测试
-├── .github/workflows/ci.yml  # CI：push/PR 时自动跑测试
 ├── AI_LOG.md             # AI 使用日志
 ├── ATTRIBUTION.md        # 拿来说明（借鉴来源）
 ├── CONTRIBUTING.md       # 贡献指南
