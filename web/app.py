@@ -265,6 +265,16 @@ def index():
     return send_from_directory(STATIC_DIR, "index.html")
 
 
+@app.route("/style.css")
+def css():
+    return send_from_directory(STATIC_DIR, "style.css")
+
+
+@app.route("/app.js")
+def js():
+    return send_from_directory(STATIC_DIR, "app.js")
+
+
 @app.route("/api/status")
 def status():
     return jsonify({"live_ai": ollama_available(), "model": MODEL})
