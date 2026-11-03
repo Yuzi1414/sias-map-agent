@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>SIAS Map Agent · 西亚斯校园地图助手</title>
+<link rel="stylesheet" href="/static/style.css"/>
+</head>
+<body>
+<header>
+  <h1>📍 SIAS Map Agent</h1>
+  <p>用一句话问我，我帮你在地图上标出郑州西亚斯学院周边的地点</p>
+  <span id="mode-badge" class="badge">连接中…</span>
+</header>
+<main>
+  <section id="chat">
+    <div id="messages"></div>
+    <form id="chat-form">
+      <input id="chat-input" type="text" placeholder="例如：学校附近有哪些好吃的？" autocomplete="off"/>
+      <button type="submit">发送</button>
+    </form>
+  </section>
+  <section id="map-panel">
+    <iframe id="map-frame" title="地图"></iframe>
+  </section>
+</main>
+<script src="/static/app.js"></script>
+</body>
+</html>
