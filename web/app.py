@@ -275,6 +275,11 @@ def js():
     return send_from_directory(STATIC_DIR, "app.js")
 
 
+@app.route("/pois.json")
+def pois():
+    return send_from_directory(STATIC_DIR, "pois.json")
+
+
 @app.route("/api/status")
 def status():
     return jsonify({"live_ai": ollama_available(), "model": MODEL})

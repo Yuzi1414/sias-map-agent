@@ -12,69 +12,128 @@ function addBubble(text, who) {
   messages.scrollTop = messages.scrollHeight;
 }
 
-// ---- 客户端演示模式数据（后端不可达时的兜底，与 app.py 的 DEMO 对齐）----
+// ---- 离线知识库（C9 升级：数据驱动，替代原 4 组硬编码 DEMO）----
 const CAT_COLORS = {
   "校园建筑": "#2563eb", "宿舍": "#16a34a", "餐饮": "#ea580c",
   "交通": "#7c3aed", "地标": "#dc2626", "休闲": "#0d9488",
 };
-function M(name, lat, lng, desc, cat) {
-  return { name: name, lat: lat, lng: lng, desc: desc, cat: cat };
-}
-const DEMO = {
-  overview: [
-    M("西亚斯学院", 34.4000, 113.7300, "郑州西亚斯学院主校区", "校园建筑"),
-    M("图书馆", 34.4012, 113.7310, "主图书馆/自习", "校园建筑"),
-    M("第一食堂", 34.3988, 113.7285, "学生食堂", "餐饮"),
-    M("第二食堂", 34.3995, 113.7320, "学生食堂", "餐饮"),
-    M("学生宿舍A区", 34.3978, 113.7280, "宿舍区", "宿舍"),
-    M("东门", 34.3992, 113.7335, "校门/出入口", "交通"),
-    M("南门", 34.3970, 113.7295, "校门/出入口", "交通"),
-    M("校园咖啡", 34.4005, 113.7338, "东门外咖啡馆", "休闲"),
-  ],
-  dining: [
-    M("第一食堂", 34.3988, 113.7285, "学生食堂", "餐饮"),
-    M("第二食堂", 34.3995, 113.7320, "学生食堂", "餐饮"),
-    M("校园咖啡", 34.4005, 113.7338, "东门外咖啡馆", "休闲"),
-    M("奶茶店", 34.4002, 113.7336, "东门外饮品", "餐饮"),
-    M("小吃街", 34.3998, 113.7340, "东门夜市小吃", "餐饮"),
-    M("清真食堂", 34.3990, 113.7305, "校内清真窗口", "餐饮"),
-  ],
-  study: [
-    M("图书馆", 34.4012, 113.7310, "主图书馆/自习", "校园建筑"),
-    M("教学楼A", 34.4008, 113.7290, "教学/自习", "校园建筑"),
-    M("自习室", 34.4010, 113.7300, "24小时自习室", "校园建筑"),
-    M("校园咖啡", 34.4005, 113.7338, "东门外咖啡馆（可自习）", "休闲"),
-    M("学生活动中心", 34.4000, 113.7315, "活动/研讨", "校园建筑"),
-  ],
-  transit: [
-    M("东门", 34.3992, 113.7335, "校门/出入口", "交通"),
-    M("南门", 34.3970, 113.7295, "校门/出入口", "交通"),
-    M("东门公交站", 34.3990, 113.7342, "公交站点", "交通"),
-    M("南门公交站", 34.3968, 113.7298, "公交站点", "交通"),
-    M("停车场", 34.3994, 113.7328, "校内停车场", "交通"),
-  ],
+
+// 意图关键词 → 类别（贴近真实问法）
+const CAT_KEYWORDS = {
+  "餐饮": ["吃", "饭", "食", "餐", "咖啡", "奶茶", "外卖", "食堂", "美食", "小吃", "喝的"],
+  "校园建筑": ["图书", "自习", "学习", "书", "教室", "教学", "上课", "楼", "借"],
+  "交通": ["公交", "地铁", "打车", "停车", "车", "门", "站", "怎么走", "多远", "距离", "离"],
+  "休闲": ["篮球", "足球", "游泳", "健身", "运动", "跑", "玩"],
+  "地标": ["钟楼", "广场", "草坪", "湖", "景观", "亭", "地标"],
+  "宿舍": ["宿舍", "住宿", "公寓"],
 };
 
-function demoReply(message) {
+let POIS = [];
+let KB_LOADED = false;
+
+async function loadPois() {
+  try {
+    const r = await fetch("pois.json", { cache: "no-store" });
+    const data = await r.json();
+    POIS = data.pois || [];
+    KB_LOADED = POIS.length > 0;
+  } catch (e) {
+    KB_LOADED = false;
+  }
+}
+
+// 球面距离（米），Haversine
+function haversine(lat1, lng1, lat2, lng2) {
+  const R = 6371000;
+  const toRad = (d) => (d * Math.PI) / 180;
+  const dLat = toRad(lat2 - lat1);
+  const dLng = toRad(lng2 - lng1);
+  const a =
+    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) *
+    Math.sin(dLng / 2) * Math.sin(dLng / 2);
+  return Math.round(R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a)));
+}
+
+// 按名称/别名匹配 POI（别名越长越优先）
+function matchPois(text) {
+  const hits = [];
+  for (const p of POIS) {
+    const terms = [p.name].concat(p.aliases || []);
+    let score = 0;
+    for (const t of terms) {
+      if (t && text.includes(t)) score = Math.max(score, t.length);
+    }
+    if (score > 0) hits.push({ p: p, score: score });
+  }
+  hits.sort((a, b) => b.score - a.score);
+  return hits.map((h) => h.p);
+}
+
+function fmtDist(m) {
+  return m >= 1000 ? (m / 1000).toFixed(1) + " 公里" : m + " 米";
+}
+
+// 离线知识库问答（后端不可达时的兜底）
+function kbReply(message) {
   const text = message || "";
-  if (/吃|饭|食|餐|咖啡|奶茶|外卖/.test(text)) {
-    return { reply: "学校餐饮集中在第一/第二食堂与东门外商业街，另有一家咖啡馆和清真窗口。", markers: DEMO.dining };
+  if (!KB_LOADED) {
+    return {
+      reply: "离线知识库加载失败，请刷新页面或检查网络。",
+      markers: [],
+    };
   }
-  if (/图书|自习|学习|书/.test(text)) {
-    return { reply: "自习推荐图书馆与24小时自习室，东门外咖啡馆也可带电脑自习。", markers: DEMO.study };
+
+  const hits = matchPois(text);
+
+  // 距离类：命中 ≥2 个地点且带"到/离/距/多远/距离"→ 算直线距离
+  if (hits.length >= 2 && /到|离|距|多远|距离/.test(text)) {
+    const a = hits[0], b = hits[1];
+    const d = haversine(a.lat, a.lng, b.lat, b.lng);
+    return {
+      reply:
+        a.name + " 到 " + b.name + " 的直线距离约 " + fmtDist(d) +
+        "，步行约 " + Math.max(1, Math.round(d / 80)) + " 分钟。",
+      markers: [a, b],
+    };
   }
-  if (/公交|地铁|打车|停车|交通|车|门/.test(text)) {
-    return { reply: "东门、南门是主要出入口，两处门外均有公交站，校内设停车场。", markers: DEMO.transit };
+
+  if (hits.length) {
+    const names = hits.slice(0, 5).map((p) => p.name).join("、");
+    return {
+      reply:
+        "找到相关地点：" + names + "。" +
+        "可以继续问「" + hits[0].name + " 到 XX 多远」看距离。",
+      markers: hits.slice(0, 8),
+    };
   }
-  return { reply: "这是西亚斯学院及周边的核心地点概览，可继续问我更具体的需求。", markers: DEMO.overview };
+
+  // 意图关键词 → 类别
+  for (const cat of Object.keys(CAT_KEYWORDS)) {
+    if (CAT_KEYWORDS[cat].some((k) => text.includes(k))) {
+      const inCat = POIS.filter((p) => p.category === cat);
+      if (inCat.length) {
+        const names = inCat.slice(0, 6).map((p) => p.name).join("、");
+        return {
+          reply: cat + "相关地点：" + names + "。",
+          markers: inCat.slice(0, 8),
+        };
+      }
+    }
+  }
+
+  return {
+    reply: "这是西亚斯学院主要地点概览，可问我「附近有什么好吃的」「图书馆到食堂多远」等。",
+    markers: POIS.slice(0, 8),
+  };
 }
 
 function renderMarkers(markers) {
   if (!markers || !markers.length) return;
   const items = markers.map((m) => ({
-    name: m.name, desc: m.desc, cat: m.cat,
+    name: m.name, desc: m.desc, cat: m.cat || m.category,
     lat: m.lat, lng: m.lng,
-    color: CAT_COLORS[m.cat] || "#64748b",
+    color: CAT_COLORS[m.cat || m.category] || "#64748b",
   }));
   const payload = JSON.stringify(items).replace(/<\//g, "<\\/");
   const html = `<!DOCTYPE html><html lang="zh-CN"><head><meta charset="utf-8"/>
@@ -99,12 +158,12 @@ async function refreshStatus() {
   try {
     const r = await fetch("/api/status");
     const s = await r.json();
-    badge.textContent = s.live_ai ? "AI 已连接（本地模型）" : "演示模式（未连接本地模型）";
+    badge.textContent = s.live_ai ? "AI 已连接（本地模型）" : "离线知识库模式";
     badge.className = "badge " + (s.live_ai ? "live" : "demo");
   } catch (e) {
-    badge.textContent = "演示模式";
+    badge.textContent = "离线知识库模式";
     badge.className = "badge demo";
-    renderMarkers(DEMO.overview);
+    if (KB_LOADED) renderMarkers(POIS.slice(0, 8));
   }
 }
 
@@ -130,13 +189,13 @@ form.addEventListener("submit", async (e) => {
     if (data.map_html) renderMap(data.map_html);
     else renderMarkers(data.markers);
   } catch (err) {
-    // 后端不可达 → 客户端演示模式兜底
+    // 后端不可达 → 离线知识库兜底
     loading.remove();
-    const d = demoReply(text);
-    addBubble(d.reply + "（演示模式：未连接后端，坐标为示例数据）", "bot");
+    const d = kbReply(text);
+    addBubble(d.reply + "（离线知识库模式：坐标为示例数据）", "bot");
     renderMarkers(d.markers);
   }
 });
 
-refreshStatus();
-addBubble("你好！告诉我你想找什么，比如「学校附近有哪些好吃的」或「图书馆怎么走」。", "bot");
+loadPois().then(() => refreshStatus());
+addBubble("你好！告诉我你想找什么，比如「附近有哪些好吃的」「图书馆到第一食堂多远」。", "bot");
